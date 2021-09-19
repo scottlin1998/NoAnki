@@ -1,3 +1,5 @@
+// deno run --allow-read --allow-write --unstable utils/constants_test.ts
+
 import constants from "./constants.ts";
 import { ensureDirSync } from "https://deno.land/std@0.107.0/fs/mod.ts";
 

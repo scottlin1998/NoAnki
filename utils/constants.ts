@@ -8,7 +8,7 @@ const EASY_DIRNAME = "4.EASY";
 const CONF_FILENAME = "conf.yaml";
 const DATA_FILENAME = "data.sqlite";
 
-// Get the absolute path of NoAnki, no matter which folder you execute the command in
+// Get the root path of NoAnki, no matter which folder you execute the command in
 const ROOT_PATH = (() => {
   const dirnames = Deno.cwd().split(sep);
   const index = dirnames.indexOf(NOANKI_DIRNAME);
