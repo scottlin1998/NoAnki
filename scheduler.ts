@@ -1,13 +1,5 @@
-import { existsSync } from "https://deno.land/std@0.107.0/fs/mod.ts";
-import { join } from "https://deno.land/std@0.107.0/path/mod.ts";
-import {
-  Database,
-  DataTypes,
-  Model,
-  SQLite3Connector,
-} from "https://deno.land/x/denodb/mod.ts";
+import { DataTypes, Model } from "https://deno.land/x/denodb/mod.ts";
 import { LAPSES, NEW_FILES, OLD_FILES } from "./utils/config.ts";
-import { DATA_PATH, ROOT_PATH } from "./utils/constants.ts";
 
 export enum Answer {
   AGAIN = "AGAIN",
@@ -21,22 +13,70 @@ export enum Status {
   RELEARNING = "RELEARNING",
   // SUSPENDED = "SUSPENDED",
 }
-const dbConnector = new SQLite3Connector({
-  filepath: DATA_PATH,
-});
 
-const db = new Database(dbConnector);
+interface File {
+  name: string;
+  // interval: number;
+  repetition: number;
+  // ease_factor: number;
+  dueDate: number;
+  suspended: boolean;
+  status: Status;
+  steps: number;
+}
+const MINIMUM_EASE_FACTOR = 1.3;
+const EASE_FACTOR_AGAIN_DELTA = -0.2;
+const EASE_FACTOR_HARD_DELTA = -0.15;
+const EASE_FACTOR_EASY_DELTA = 0.15;
+const REDUCED_BONUS = OLD_FILES.EASY_BONUS - (OLD_FILES.EASY_BONUS - 1.0) / 2.0;
 class File extends Model {
-  name!: string;
-  interval!: number;
-  repetition!: number;
-  ease!: number;
-  dueDate!: number;
-  // graduated!: boolean;
-  suspended!: boolean;
-  status!: Status;
-  steps!: number;
+  /// Transform the provided hard/good/easy interval.
+  /// - Apply configured interval multiplier.
+  /// - Apply fuzz.
+  /// - Ensure it is at least `minimum`, and at least 1.
+  /// - Ensure it is at or below the configured maximum interval.
+  private _interval = 1;
+  get interval() {
+    return this._interval;
+  }
+  set interval(value) {
+    value *= OLD_FILES.INTERVAL_MODIFIER;
+    if (value < LAPSES.MINIMUM_INTERVAL) {
+      this._interval = LAPSES.MINIMUM_INTERVAL;
+    } else if (value > OLD_FILES.MAXIMUM_INTERVAL) {
+      this._interval = OLD_FILES.MAXIMUM_INTERVAL;
+    } else {
+      this._interval = value;
+    }
+  }
+  private _ease_factor = 0;
+  get ease_factor() {
+    return this._ease_factor;
+  }
+  set ease_factor(value) {
+    if (value < 1.3) this._ease_factor = MINIMUM_EASE_FACTOR;
+    else this._ease_factor = value;
+  }
 
+  private _lapses = 0;
+  private _leeched = false;
+
+  get lapses() {
+    return this._lapses;
+  }
+  set lapses(value) {
+    this._lapses = value;
+    // leech_threshold_met
+    if (LAPSES.LEECH_THRESHOLD > 0) {
+      const halfThreshold = Math.max(
+        Math.ceil(LAPSES.LEECH_THRESHOLD / 2.0),
+        1.0,
+      );
+      // at threshold, and every half threshold after that, rounding up
+      this._leeched = this.lapses >= LAPSES.LEECH_THRESHOLD &&
+        (this.lapses - LAPSES.LEECH_THRESHOLD) % halfThreshold == 0;
+    } else this._leeched = false;
+  }
   static table = "files";
   static timestamps = true;
   static fields = {
@@ -44,28 +84,44 @@ class File extends Model {
       type: DataTypes.TEXT,
       primaryKey: true,
     },
-    interval: DataTypes.INTEGER,
+    _interval: DataTypes.INTEGER,
     repetition: DataTypes.INTEGER,
-    ease: DataTypes.INTEGER,
+    _ease_factor: DataTypes.INTEGER,
     dueDate: DataTypes.INTEGER,
     // graduated: DataTypes.BOOLEAN,
-    suspended: DataTypes.BOOLEAN,
+    // suspended: DataTypes.BOOLEAN,
     status: DataTypes.TEXT,
     steps: DataTypes.INTEGER,
+    _lapses: DataTypes.INTEGER,
+    _leeched: DataTypes.BOOLEAN,
   };
   static defaults = {
-    interval: 0,
+    interval: 1,
     repetition: 0,
-    ease: NEW_FILES.STARTING_EASE,
+    ease_factor: NEW_FILES.STARTING_EASE,
     dueDate: new Date().getTime(),
     // graduated: false,
     suspended: false,
     status: Status.LEARNING,
     steps: 0,
+    lapses: 0,
+    leeched: true,
   };
-
+  /// True when lapses is at threshold, or every half threshold after that.
+  /// Non-even thresholds round up the half threshold.
+  private leech_threshold_met() {
+    if (LAPSES.LEECH_THRESHOLD > 0) {
+      const halfThreshold = Math.max(
+        Math.ceil(LAPSES.LEECH_THRESHOLD / 2.0),
+        1.0,
+      );
+      // at threshold, and every half threshold after that, rounding up
+      return this.lapses >= LAPSES.LEECH_THRESHOLD &&
+        (this.lapses - LAPSES.LEECH_THRESHOLD) % halfThreshold == 0;
+    } else return false;
+  }
   practice(answer: Answer) {
-    const now = new Date();
+    const now = new Date(this.dueDate);
     const _ = "_";
     // Interval Modifier
     // An extra multiplier that is applied to all reviews.
@@ -94,9 +150,10 @@ class File extends Model {
 
     switch (answer + _ + this.status) {
       case Answer.AGAIN + _ + Status.LEARNING:
+        this.lapses++;
         // Again
-        // The card is placed into relearning mode, the ease is decreased by 20 percentage points
-        // (that is, 20 is subtracted from the ease value, which is in units of percentage points),
+        // The card is placed into relearning mode, the ease_factor is decreased by 20 percentage points
+        // (that is, 20 is subtracted from the ease_factor value, which is in units of percentage points),
         // and the current interval is multiplied by the value of new interval
         // (this interval will be used when the card exits relearning mode).
         //
@@ -114,33 +171,43 @@ class File extends Model {
         this.dueDate = now.setMinutes(
           now.getMinutes() + NEW_FILES.STEPS[this.steps++],
         );
+        this.ease_factor += EASE_FACTOR_AGAIN_DELTA;
+        if (this.ease_factor < 1.3) this.ease_factor = MINIMUM_EASE_FACTOR;
         break;
       case Answer.AGAIN + _ + Status.REVIEWING:
-        this.interval = LAPSES.MINIMUM_INTERVAL +
-          LAPSES.NEW_INTERVAL * this.interval;
+        this.lapses++;
+        this.interval = Math.max(
+          LAPSES.MINIMUM_INTERVAL,
+          LAPSES.NEW_INTERVAL * this.interval,
+          1,
+        );
+        this.ease_factor = this.ease_factor + EASE_FACTOR_AGAIN_DELTA;
         this.dueDate = now.setDate(now.getDate() + (this.interval as number));
         this.repetition = 0;
         break;
       case Answer.HARD + _ + Status.LEARNING:
         // Hard
-        // The card’s ease is decreased by 15 percentage points and the current interval is multiplied by 1.2.
+        // The card’s ease_factor is decreased by 15 percentage points and the current interval is multiplied by 1.2.
         //
         // Hard Interval
         // The multiplier used when you use the Hard button.
         // The percentage is relative to the previous interval with a default of 120%,
         // a card with a 10-day interval will be given 12 days.
         //
-        // this.ease * (1 - 0.15)
-
+        // this.ease_factor * (1 - 0.15)
+        this.dueDate = now.setMinutes(
+          now.getMinutes() + NEW_FILES.STEPS[this.steps],
+        );
         break;
       case Answer.HARD + _ + Status.REVIEWING:
-        this.interval = this.interval * this.ease *
-          OLD_FILES.HARD_INTERVAL * OLD_FILES.INTERVAL_MODIFIER;
+        this.interval = this.interval *
+          OLD_FILES.HARD_INTERVAL;
         this.dueDate = now.setDate(now.getDate() + (this.interval as number));
+        this.ease_factor += EASE_FACTOR_HARD_DELTA;
         break;
       case Answer.GOOD + _ + Status.LEARNING:
         // Good
-        // The current interval is multiplied by the current ease. The ease is unchanged.
+        // The current interval is multiplied by the current ease_factor. The ease_factor is unchanged.
         if (this.steps < NEW_FILES.STEPS.length) {
           this.dueDate = now.setMinutes(
             now.getMinutes() + NEW_FILES.STEPS[this.steps++],
@@ -156,51 +223,51 @@ class File extends Model {
         }
         break;
       case Answer.GOOD + _ + Status.REVIEWING:
-        this.interval = this.interval * this.ease *
-          OLD_FILES.INTERVAL_MODIFIER;
+        this.interval = this.interval * this.ease_factor;
         this.dueDate = now.setDate(now.getDate() + (this.interval as number));
         break;
-      case Answer.EASY + _ + Status.LEARNING:
         // Easy
-        // The current interval is multiplied by the current ease times the easy bonus
-        // and the ease is increased by 15 percentage points.
-        //
-        // Easy Bonus
-        // An extra multiplier applied to the interval when a review card is answered Easy.
-        // With the default value of 130%, Easy will give an interval that is 1.3 times the Good interval.
-        this.interval = NEW_FILES.GRADUATING_INTERVAL;
-        this.dueDate = now.setDate(now.getDate() + (this.interval as number));
-        break;
+      // The current interval is multiplied by the current ease_factor times the easy bonus
+      // and the ease_factor is increased by 15 percentage points.
+      //
+      // Easy Bonus
+      // An extra multiplier applied to the interval when a review card is answered Easy.
+      // With the default value of 130%, Easy will give an interval that is 1.3 times the Good interval.
+      // this.interval = NEW_FILES.GRADUATING_INTERVAL;
+      // this.status = Status.REVIEWING;
+      // this.dueDate = now.setDate(now.getDate() + (this.interval as number));
+      // break;
+      case Answer.EASY + _ + Status.LEARNING:
       case Answer.EASY + _ + Status.REVIEWING:
-        this.interval = this.interval * this.ease *
-          OLD_FILES.INTERVAL_MODIFIER * OLD_FILES.EASY_BONUS;
+        if (this.interval <= 1) {
+          this.interval = NEW_FILES.EASY_INTERVAL;
+        } else {
+          // this.interval*=OLD_FILES.EASY_BONUS;
+          this.interval = this.interval * this.ease_factor * REDUCED_BONUS;
+          // this.interval*=OLD_FILES.EASY_BONUS;
+          this.ease_factor += EASE_FACTOR_EASY_DELTA;
+        }
         this.dueDate = now.setDate(now.getDate() + (this.interval as number));
         break;
     }
     // this.repetition = this.repetition + 1;
-
-    // this.ease = this.ease +
+    // this.ease_factor = this.ease_factor +
     //   (0.1 - (5 - grade) * (0.08 + (5 - grade) * 0.02));
-    // this.ease *= OLD_FILES.EASY_BONUS;
 
     // There are a few limitations on the scheduling values that cards can take. Eases will never be decreased below 130%;
     // SuperMemo’s research has shown that eases below 130% tend to result in cards becoming due more often than is useful and annoying users.
     // Intervals will never be increased beyond the value of maximum interval.
     // Finally, all new intervals (except Again) will always be at least one day longer than the previous interval.
-    if (this.ease < 1.3) this.ease = 1.3;
 
+    console.log("\n", new Date(this.dueDate).toLocaleString());
     // this.dueDate = now.setDate(now.getDate() + (this.interval as number));
-    // console.log(this.ease, grade, this.repetition, this.interval);
+    // console.log(this.ease_factor, grade, this.repetition, this.interval);
   }
 }
 
-db.link([File]);
-db.sync();
-
 // If the file does not exist, delete its data
-for (const file of await File.all()) {
-  if (!existsSync(join(ROOT_PATH, file.name as string))) file.delete();
-}
+// for (const file of await File.all()) {
+//   if (!existsSync(join(ROOT_PATH, file.name as string))) file.delete();
+// }
 
-export default db;
-export { dbConnector, File };
+export default File;
