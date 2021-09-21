@@ -1,28 +1,27 @@
 import { Model } from "https://deno.land/x/denodb/mod.ts";
 import { NEW_FILES } from "./utils/config.ts";
-
-const DEFAULT_SECS_IF_MISSING = 60;
+const FUZZ_FACTOR = true;
+const DEFAULT_MINUTES_IF_MISSING = 1;
 enum Answer {
   AGAIN,
   HARD,
   GOOD,
   EASY,
 }
+export enum Status {
+  LEARNING = "LEARNING",
+  REVIEWING = "REVIEWING",
+  RELEARNING = "RELEARNING",
+  // SUSPENDED = "SUSPENDED",
+}
 class Learning {
-  remaining_steps = NEW_FILES.STEPS.length;
-  scheduled_secs = 0;
-  scheduled_days = (() => {
+  current_step = 0;
+  due_date = (() => {
     const now = new Date();
     return now.setMinutes(now.getMinutes() + NEW_FILES.STEPS[0]);
   })();
-  get remaining_for_failed() {
-    return NEW_FILES.STEPS.length;
-  }
-  remaining_for_good(remaining: number) {
-    const idx = this.get_index(remaining);
-    console.log(idx,"remaining_for_good");
-    return NEW_FILES.STEPS.length - (idx + 1);
-  }
+  scheduled_days = 0;
+  status = Status.LEARNING;
   next_states(answer: Answer) {
     switch (answer) {
       case Answer.AGAIN:
@@ -40,82 +39,86 @@ class Learning {
     }
   }
   answer_again() {
-    this.remaining_steps = NEW_FILES.STEPS.length;
-    this.scheduled_secs = this.with_learning_fuzz(
-      this.again_delay_secs_learn(),
+    const delayed_seconds = this.with_learning_fuzz(
+      NEW_FILES.STEPS[0] || DEFAULT_MINUTES_IF_MISSING,
+    );
+    const now = new Date();
+    this.due_date = now.setMinutes(
+      now.getMinutes() + delayed_seconds,
     );
   }
 
   answer_hard() {
-    const hard_delay = this.hard_delay_secs(this.remaining_steps);
-    if (hard_delay) {
-      this.scheduled_secs = this.with_learning_fuzz(hard_delay);
-    } else {
-      //   this.scheduled_days= this.fuzzed_graduating_interval_good(),
-    }
+    const current = NEW_FILES.STEPS[this.current_step];
+    let next = NEW_FILES.STEPS.length > 1
+      ? NEW_FILES.STEPS[this.current_step + 1] || DEFAULT_MINUTES_IF_MISSING
+      : current * 2;
+    next = Math.max(next, current);
+    console.log(next, current);
+    const delayed_seconds = FUZZ_FACTOR
+      ? this.with_learning_fuzz((current + next) / 2)
+      : (current + next) / 2;
+    const now = new Date();
+    this.due_date = now.setMinutes(
+      now.getMinutes() + delayed_seconds,
+    );
   }
 
   answer_good() {
-    const good_delay = this.good_delay_secs(this.remaining_steps);
-    if (good_delay) {
-      this.remaining_steps = this.remaining_for_good(this.remaining_steps);
-      this.scheduled_secs = this.with_learning_fuzz(good_delay);
-    } else {
+    if (this.current_step < NEW_FILES.STEPS.length) {
+      const delayed_seconds = FUZZ_FACTOR
+        ? this.with_learning_fuzz(NEW_FILES.STEPS[this.current_step])
+        : NEW_FILES.STEPS[this.current_step];
+      //   console.log(delayed_seconds);
+      const now = new Date();
+      this.due_date = now.setMinutes(now.getMinutes() + delayed_seconds);
+      this.current_step++;
+    }
+
+    if (this.current_step >= NEW_FILES.STEPS.length) {
+      this.status = Status.REVIEWING;
+      const now = new Date();
+      this.due_date = now.setDate(
+        now.getDate() + NEW_FILES.GRADUATING_INTERVAL,
+      );
+      this.scheduled_days = NEW_FILES.GRADUATING_INTERVAL;
       // this.scheduled_days=this.fuzzed_graduating_interval_good(),
     }
   }
 
   answer_easy() {
+    const now = new Date();
+    this.due_date = now.setDate(now.getDate() + NEW_FILES.EASY_INTERVAL);
+    this.scheduled_days = NEW_FILES.EASY_INTERVAL;
+    this.status = Status.REVIEWING;
     // this.scheduled_days=this.fuzzed_graduating_interval_easy(),
   }
-  with_learning_fuzz(secs: number) {
-    const upper_exclusive = secs + Math.round(Math.min(secs * 0.25, 300.0));
-    return secs >= upper_exclusive
-      ? secs
-      : Math.floor(secs + Math.random() * (upper_exclusive - secs));
-  }
-  again_delay_secs_learn() {
-    return this.secs_at_index(0) || DEFAULT_SECS_IF_MISSING;
-  }
-  secs_at_index(index: number) {
-    // console.log(NEW_FILES.STEPS[index], index, "secs_at_index");
-    return NEW_FILES.STEPS[index] * 60;
-  }
-  hard_delay_secs(remaining: number) {
-    const idx = this.get_index(remaining);
-    console.log(idx,"hard_delay_secs");
-    const current = this.secs_at_index(idx) || NEW_FILES.STEPS[0];
-
-    let next = NEW_FILES.STEPS.length > 1
-      ? this.secs_at_index(idx + 1) || 60
-      : current * 2;
-
-    next = Math.max(next, current);
-
-    return (current + next) / 2;
-  }
-  get_index(remaining: number) {
-    const total = NEW_FILES.STEPS.length;
-    const index = total - (remaining % 1000);
-    return Math.min(index < 0 ? 0 : index, total - 1 < 0 ? 0 : total - 1);
-  }
-  //   saturating_sub(value:number){
-  //       return value<0?0:value;
-  //   }
-  good_delay_secs(remaining: number) {
-    const idx = this.get_index(remaining);
-    console.log(idx,"good_delay_secs");
-    // console.log(idx,"good_delay_secs");
-    return this.secs_at_index(idx + 1);
+  with_learning_fuzz(minutes: number) {
+    const upper_exclusive = minutes + Math.round(Math.min(minutes * 0.25, 5));
+    return minutes >= upper_exclusive
+      ? minutes
+      : Math.floor(minutes + Math.random() * (upper_exclusive - minutes));
   }
 }
 
 const l = new Learning();
-console.log(l);
-l.next_states(Answer.HARD);
-console.log(l);
-l.next_states(Answer.GOOD);
-console.log(l);
-l.next_states(Answer.GOOD);
-console.log(l.with_learning_fuzz(600));
+// console.log(l);
+l.next_states(Answer.AGAIN);
+console.log(
+  l,
+  new Date(l.due_date).toLocaleDateString(),
+  new Date(l.due_date).toLocaleTimeString(),
+);
+l.next_states(Answer.AGAIN);
+console.log(
+  l,
+  new Date(l.due_date).toLocaleDateString(),
+  new Date(l.due_date).toLocaleTimeString(),
+);
+// l.next_states(Answer.GOOD);
+console.log(
+  l,
+  new Date(l.due_date).toLocaleDateString(),
+  new Date(l.due_date).toLocaleTimeString(),
+);
 export default Learning;
