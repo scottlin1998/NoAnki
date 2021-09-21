@@ -1,22 +1,29 @@
-import { NEW_FILES } from "./utils/config.ts";
+// deno-lint-ignore-file camelcase
+import { DataTypes, Model } from "https://deno.land/x/denodb/mod.ts";
+import Answer from "./Answer.ts";
+import { GENERAL, NEW_FILES } from "./utils/config.ts";
 
-const FUZZ_FACTOR = true;
 const DEFAULT_MINUTES_IF_MISSING = 1;
-enum Answer {
-  AGAIN,
-  HARD,
-  GOOD,
-  EASY,
-}
 
-class Learning {
+class Learning extends Model {
+  static table = "learnings";
+
   current_step = 0;
   due_date = (() => {
     const now = new Date();
     return now.setMinutes(now.getMinutes() + NEW_FILES.STEPS[0]);
   })();
 
-  private next_states(answer: Answer) {
+  static fields = {
+    name: {
+      type: DataTypes.TEXT,
+      primaryKey: true,
+    },
+    current_step: DataTypes.INTEGER,
+    due_date: DataTypes.INTEGER,
+  };
+
+  next_states(answer: Answer) {
     switch (answer) {
       case Answer.AGAIN:
         this.answer_again();
@@ -49,7 +56,7 @@ class Learning {
       ? NEW_FILES.STEPS[this.current_step + 1] || DEFAULT_MINUTES_IF_MISSING
       : current * 2;
     next = Math.max(next, current);
-    const delayed_seconds = FUZZ_FACTOR
+    const delayed_seconds = GENERAL.FUZZ_FACTOR
       ? this.with_learning_fuzz((current + next) / 2)
       : (current + next) / 2;
     const now = new Date();
@@ -60,7 +67,7 @@ class Learning {
 
   private answer_good() {
     if (this.current_step < NEW_FILES.STEPS.length) {
-      const delayed_seconds = FUZZ_FACTOR
+      const delayed_seconds = GENERAL.FUZZ_FACTOR
         ? this.with_learning_fuzz(NEW_FILES.STEPS[this.current_step])
         : NEW_FILES.STEPS[this.current_step];
       const now = new Date();
@@ -80,7 +87,7 @@ class Learning {
     const now = new Date();
     this.due_date = now.setDate(now.getDate() + NEW_FILES.EASY_INTERVAL);
   }
-  
+
   private with_learning_fuzz(minutes: number) {
     const upper_exclusive = minutes + Math.round(Math.min(minutes * 0.25, 5));
     return minutes >= upper_exclusive

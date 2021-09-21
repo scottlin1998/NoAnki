@@ -10,6 +10,7 @@ type Config = {
     REVOCATION_TIMEOUT: number;
     MAXIMUM_DISPLAYS: number;
     DISPLAY_IN_BATCHES: boolean;
+    FUZZ_FACTOR: boolean;
   };
   NEW_FILES: {
     ORDER: NewFilesOrder;
@@ -55,6 +56,7 @@ const $default: Config = {
     REVOCATION_TIMEOUT: 60,
     MAXIMUM_DISPLAYS: 5,
     DISPLAY_IN_BATCHES: true,
+    FUZZ_FACTOR: true,
   },
   NEW_FILES: {
     ORDER: NewFilesOrder.Sequential,
