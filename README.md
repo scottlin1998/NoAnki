@@ -5,14 +5,35 @@
 
 > 换言之，就是**NoAnki**作为中间层，它对文件格式没有要求。你喜欢用什么软件去浏览你的复习文件都可以，你想把什么格式的文件作为复习材料都可以。
 
+## 参数详情
+
+| 名称                                 | 作用对象 | 介绍                                                         | 默认值        |
+| ------------------------------------ | :------- | :----------------------------------------------------------- | ------------- |
+| **步伐 （Steps）**                   | 新文件   | 新文件在学习阶段被标记为@GOOD会按照这个时间间隔进行学习，在最后一个步伐结束后新文件会毕业升级成为复习文件 | ['1m', '10m'] |
+| **毕业间隔 （Graduating interval）** | 新文件   | 新文件毕业后到第一次复习的天数间隔                           | 1             |
+| **简单间隔 （Easy interval**         | 新文件   | 新文件被标记为@EASY毕业后到第一次复习的天数间隔              | 4             |
+| **开始简化 （Starting ease）**       | 新文件   | 新文件的初始难易指数                                         | 2.5           |
+| **最大复习数/天**                    | 复习文件 | 每天最多可以复习多少个文件                                   | 200           |
+| **简单奖励 （Easy bonus)**           | 复习文件 | 当一个复习文件提前复习且被标记为@EASY，简单奖励会乘以下次复习的时间间隔由此来延迟下次复习，相当于奖励延迟复习。 | 1.3           |
+|                                      |          |                                                              |               |
+|                                      |          |                                                              |               |
+|                                      |          |                                                              |               |
+|                                      |          |                                                              |               |
+|                                      |          |                                                              |               |
+
+
+
 > 跨平台支持 Window, Linux, MacOs, Android
 
 > 资料参考链接
 
-- *[Application of a computer to improve the results obtained in working with the SuperMemo method](https://www.supermemo.com/en/archives1990-2015/english/ol/sm2)*
-- *[The Anki 2.1 scheduler](https://faqs.ankiweb.net/the-anki-2.1-scheduler.html)*
-- *[The 2021 scheduler](https://faqs.ankiweb.net/the-2021-scheduler.html)*
-- *[What spaced repetition algorithm does Anki use?](https://faqs.ankiweb.net/what-spaced-repetition-algorithm.html)*
-- *[Maxvien/supermemo](https://github.com/Maxvien/supermemo)*
-- [Deck Options of Anki](https://docs.ankiweb.net/deck-options.html)
+1. *[Application of a computer to improve the results obtained in working with the SuperMemo method](https://www.supermemo.com/en/archives1990-2015/english/ol/sm2)*
+2. *[The Anki 2.1 scheduler](https://faqs.ankiweb.net/the-anki-2.1-scheduler.html)*
+3. *[The 2021 scheduler](https://faqs.ankiweb.net/the-2021-scheduler.html)*
+4. *[What spaced repetition algorithm does Anki use?](https://faqs.ankiweb.net/what-spaced-repetition-algorithm.html)*
+5. *[Maxvien/supermemo](https://github.com/Maxvien/supermemo)*
+6. *[Deck Options of Anki](https://docs.ankiweb.net/deck-options.html)*
+7. *[Studying](https://docs.ankiweb.net/studying.html)*
+8. [*anki/rslib/src/scheduler/states](https://github.com/ankitects/anki/tree/main/rslib/src/scheduler/states)*
+9. *[anki/pylib/anki/scheduler](https://github.com/ankitects/anki/tree/main/pylib/anki/scheduler)*
 
