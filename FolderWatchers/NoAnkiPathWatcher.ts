@@ -3,8 +3,12 @@ import Reviewing from "../Reviewing.ts";
 import { WatcherEvents } from "../Watcher.ts";
 const reviewingPaths: string[] = [];
 const learningPaths: string[] = [];
-// 从数据库中加载需要学习的内容
-export default async function (
+
+function main(){
+  // 从数据库中加载需要学习的内容
+  console.log(85245);
+}
+async function fileHandler (
   event: WatcherEvents,
   path: string,
 ) {
@@ -46,4 +50,9 @@ export default async function (
       }
       break;
   }
+}
+
+export{
+  main,
+  fileHandler
 }

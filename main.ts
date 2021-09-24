@@ -1,11 +1,17 @@
 import { ensureDirSync } from "https://deno.land/std@0.107.0/fs/mod.ts";
 import { dirname } from "https://deno.land/std@0.107.0/path/mod.ts";
-import RootPathWatcher from "./FolderWatchers.ts/RootPathWatcher.ts";
-import AgainPathWatcher from "./FolderWatchers.ts/AgainPathWatcher.ts";
-import EasyPathWatcher from "./FolderWatchers.ts/EasyPathWatcher.ts";
-import GoodPathWatcher from "./FolderWatchers.ts/GoodPathWatcher.ts";
-import HardPathWatcher from "./FolderWatchers.ts/HardPathWatcher.ts";
-import NoAnkiPathWatcher from "./FolderWatchers.ts/NoAnkiPathWatcher.ts";
+import {
+  fileHandler as RootPathWatcher,
+  main as RootPathMain,
+} from "./FolderWatchers/RootPathWatcher.ts";
+import {
+  fileHandler as NoAnkiPathWatcher,
+  main as NoAnkiPathMain,
+} from "./FolderWatchers/NoAnkiPathWatcher.ts";
+import AgainPathWatcher from "./FolderWatchers/AgainPathWatcher.ts";
+import EasyPathWatcher from "./FolderWatchers/EasyPathWatcher.ts";
+import GoodPathWatcher from "./FolderWatchers/GoodPathWatcher.ts";
+import HardPathWatcher from "./FolderWatchers/HardPathWatcher.ts";
 import Watcher from "./Watcher.ts";
 import {
   AGAIN_PATH,
@@ -21,6 +27,9 @@ ensureDirSync(AGAIN_PATH);
 ensureDirSync(HARD_PATH);
 ensureDirSync(GOOD_PATH);
 ensureDirSync(EASY_PATH);
+
+RootPathMain();
+NoAnkiPathMain();
 
 const pathToWatch = [
   ROOT_PATH,

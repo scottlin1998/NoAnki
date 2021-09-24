@@ -9,7 +9,7 @@ const EASE_FACTOR_HARD_DELTA = -0.15;
 const EASE_FACTOR_EASY_DELTA = 0.15;
 
 class Reviewing extends Model {
-  static table = 'reviews';
+  static table = 'reviewings';
   
   scheduled_days = 0;
   //   elapsed_days = 0;

@@ -1,15 +1,30 @@
+import { existsSync } from "https://deno.land/std@0.107.0/fs/mod.ts";
 import db from "../database.ts";
 import Learning from "../Learning.ts";
 import Reviewing from "../Reviewing.ts";
 import { WatcherEvents } from "../Watcher.ts";
 
-db.link([Learning, Reviewing]);
-db.sync();
+async function main() {
+  db.link([Learning, Reviewing]);
+  await db.sync();
 
-// 删除所有不存在文件的数据
+  // 删除所有不存在文件的数据
+  const reviewings = await Reviewing.all() as Reviewing[];
+  for (const reviewing of reviewings) {
+    if (!existsSync(reviewing.name as string)) {
+      reviewing.delete();
+    }
+  }
+  const learnings = await Learning.all() as Learning[];
+  for (const learning of learnings) {
+    if (!existsSync(learning.name as string)) {
+      learning.delete();
+    }
+  }
+}
 
 // 过滤文件夹
-export default async function (
+async function fileHandler(
   event: WatcherEvents,
   path: string,
 ) {
@@ -42,3 +57,5 @@ export default async function (
       break;
   }
 }
+
+export { fileHandler, main };
