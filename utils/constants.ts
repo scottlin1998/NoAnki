@@ -5,7 +5,7 @@ const AGAIN_DIRNAME = "1.AGAIN";
 const HARD_DIRNAME = "2.HARD";
 const GOOD_DIRNAME = "3.GOOD";
 const EASY_DIRNAME = "4.EASY";
-const CONF_FILENAME = "conf.yaml";
+const CONF_FILENAME = "config.yaml";
 const DATA_FILENAME = "data.sqlite";
 
 // Get the root path of NoAnki, no matter which folder you execute the command in
